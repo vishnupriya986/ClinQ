@@ -40,6 +40,10 @@ input:focus,select:focus { border-color:#65b18b; box-shadow:0 0 0 3px #65b18b20;
 .meter { height:8px; background:#e7eeea; border-radius:10px; overflow:hidden; margin-bottom:18px; }
 .meter span { display:block; height:100%; background:var(--coral); border-radius:inherit; }
 .result-card p { color:#536d68; line-height:1.55; font-size:15px; margin:10px 0 0; }
+.input-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 14px; margin-top:18px; padding-top:16px; border-top:1px solid var(--line); color:#536d68; font-size:13px; }
+.input-summary strong { grid-column:1/-1; color:var(--navy); font-size:14px; }
+.input-summary span { line-height:1.4; }
+.input-summary b { color:#48635f; }
 .workspace-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr); gap:18px; align-items:start; }
 .card-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; color:var(--navy); }
 .card-heading h2 { font:700 19px Manrope; margin:7px 0 0; }

@@ -72,7 +72,7 @@ app.get('/api/predictions/:id', async (request, response) => {
   const result = await pool.query('SELECT * FROM predictions WHERE id = $1 AND user_id = $2', [request.params.id, user.id])
   if (!result.rowCount) return response.status(404).json({ error: 'Prediction not found' })
   const messages = await pool.query('SELECT id, role, content, created_at FROM chat_messages WHERE prediction_id = $1 ORDER BY created_at, id', [request.params.id])
-  response.json({ prediction: result.rows[0], messages: messages.rows })
+  response.json({ prediction: result.rows[0], chat: messages.rows, messages: messages.rows })
 })
 
 app.post('/api/predictions/:id/messages', async (request, response) => {
