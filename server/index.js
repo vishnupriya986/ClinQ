@@ -34,8 +34,6 @@ const initializeDatabase = async () => {
     CREATE INDEX IF NOT EXISTS chat_messages_prediction_idx ON chat_messages (prediction_id, created_at);`)
 }
 
-export { app, initializeDatabase }
-
 app.post('/api/auth/signup', async (request, response) => {
   const { name, email, password } = request.body
   if (!name || !email || !password) return response.status(400).json({ error: 'Name, email, and password are required' })
@@ -143,11 +141,9 @@ app.get('/api/reports', async (_request, response) => {
   }
 })
 
-if (!process.env.VERCEL) {
-  initializeDatabase().then(() => app.listen(port, () => {
-    console.log(`ClinQ API running at http://localhost:${port}`)
-  })).catch((error) => {
-    console.error('Database initialization failed:', error.message)
-    process.exit(1)
-  })
-}
+initializeDatabase().then(() => app.listen(port, () => {
+  console.log(`ClinQ API running at http://localhost:${port}`)
+})).catch((error) => {
+  console.error('Database initialization failed:', error.message)
+  process.exit(1)
+})
