@@ -31,7 +31,8 @@ const initializeDatabase = async () => {
     CREATE TABLE IF NOT EXISTS predictions (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, disease VARCHAR(40) NOT NULL, clinical_data JSONB NOT NULL DEFAULT '{}'::jsonb, risk_level VARCHAR(20) NOT NULL, risk_percentage INTEGER NOT NULL, analysis TEXT NOT NULL DEFAULT '', recommendations TEXT NOT NULL DEFAULT '', files JSONB NOT NULL DEFAULT '[]'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
     CREATE INDEX IF NOT EXISTS predictions_user_created_idx ON predictions (user_id, created_at DESC);
     CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, prediction_id INTEGER NOT NULL REFERENCES predictions(id) ON DELETE CASCADE, role VARCHAR(20) NOT NULL, content TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE INDEX IF NOT EXISTS chat_messages_prediction_idx ON chat_messages (prediction_id, created_at);`)
+    CREATE INDEX IF NOT EXISTS chat_messages_prediction_idx ON chat_messages (prediction_id, created_at);
+    CREATE INDEX IF NOT EXISTS chat_messages_prediction_order_idx ON chat_messages (prediction_id, created_at, id);`)
 }
 
 export { app, initializeDatabase }
@@ -70,7 +71,7 @@ app.get('/api/predictions/:id', async (request, response) => {
   const user = await requireUser(request, response); if (!user) return
   const result = await pool.query('SELECT * FROM predictions WHERE id = $1 AND user_id = $2', [request.params.id, user.id])
   if (!result.rowCount) return response.status(404).json({ error: 'Prediction not found' })
-  const messages = await pool.query('SELECT role, content, created_at FROM chat_messages WHERE prediction_id = $1 ORDER BY created_at', [request.params.id])
+  const messages = await pool.query('SELECT id, role, content, created_at FROM chat_messages WHERE prediction_id = $1 ORDER BY created_at, id', [request.params.id])
   response.json({ prediction: result.rows[0], messages: messages.rows })
 })
 
@@ -80,12 +81,13 @@ app.post('/api/predictions/:id/messages', async (request, response) => {
   if (!ownership.rowCount) return response.status(404).json({ error: 'Prediction not found' })
   const { role, content } = request.body
   if (!['user', 'assistant'].includes(role) || typeof content !== 'string' || !content.trim() || content.length > 12000) return response.status(400).json({ error: 'A valid chat message is required' })
-  const result = await pool.query('INSERT INTO chat_messages (prediction_id, role, content) VALUES ($1,$2,$3) RETURNING role, content, created_at', [request.params.id, role, content])
+  const result = await pool.query('INSERT INTO chat_messages (prediction_id, role, content) VALUES ($1,$2,$3) RETURNING id, role, content, created_at', [request.params.id, role, content])
   response.status(201).json({ message: result.rows[0] })
 })
 
 app.post('/api/chat', async (request, response) => {
-  const { message, disease, prediction, clinicalData, files, file, predictionId, userId } = request.body
+  const { message, disease, prediction, clinicalData, files, file, predictionId } = request.body
+  const user = await requireUser(request, response); if (!user) return
   if (!message || typeof message !== 'string') return response.status(400).json({ error: 'A message is required' })
   if (message.length > 4000) return response.status(400).json({ error: 'Please keep the question under 4,000 characters' })
   if (file) {
@@ -93,14 +95,18 @@ app.post('/api/chat', async (request, response) => {
     const encodedSize = typeof file.data === 'string' ? Math.ceil(file.data.length * 0.75) : 0
     if (!allowedType || !file.data || encodedSize > maxDocumentBytes) return response.status(400).json({ error: 'The document is missing, unsupported, or larger than 10 MB' })
   }
-  if (predictionId && userId) {
-    const ownership = await pool.query('SELECT id FROM predictions WHERE id = $1 AND user_id = $2', [predictionId, userId])
+  let previousMessages = []
+  if (predictionId) {
+    const ownership = await pool.query('SELECT id FROM predictions WHERE id = $1 AND user_id = $2', [predictionId, user.id])
     if (!ownership.rowCount) return response.status(404).json({ error: 'Prediction not found' })
+    const history = await pool.query('SELECT role, content FROM chat_messages WHERE prediction_id = $1 ORDER BY created_at DESC, id DESC LIMIT 20', [predictionId])
+    previousMessages = history.rows.reverse()
   }
   if (!process.env.OPENAI_API_KEY) return response.status(503).json({ error: 'AI provider is not configured' })
 
   try {
-    const context = `Current topic: ${disease || 'general health'}\nEducational estimate: ${prediction || 'not generated'}\nClinical data: ${JSON.stringify(clinicalData || {})}\nUploaded files: ${files?.join(', ') || 'none'}\nAttachment handling: Report only text or image details that are actually legible or visible. If an image is blurry, cropped, rotated, low-resolution, poorly lit, handwritten, or otherwise uncertain, say so and do not guess. Separate observed or transcribed content from possible interpretations and unknowns.\nQuestion: ${message}`
+    const conversation = previousMessages.map((item) => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`).join('\n') || 'No previous conversation.'
+    const context = `Current topic: ${disease || 'general health'}\nEducational estimate: ${prediction || 'not generated'}\nClinical data: ${JSON.stringify(clinicalData || {})}\nUploaded files: ${files?.join(', ') || 'none'}\nPrevious conversation (most recent 20 messages):\n${conversation}\nAttachment handling: Report only text or image details that are actually legible or visible. If an image is blurry, cropped, rotated, low-resolution, poorly lit, handwritten, or otherwise uncertain, say so and do not guess. Separate observed or transcribed content from possible interpretations and unknowns.\nQuestion: ${message}`
     const inputContent = [{ type: 'input_text', text: context }]
     if (file?.data && file?.type?.startsWith('image/')) inputContent.push({ type: 'input_image', image_url: file.data })
     if (file?.data && (file?.type === 'application/pdf' || file?.type?.startsWith('text/'))) inputContent.push({ type: 'input_file', filename: file.name || 'health-report', file_data: file.data })

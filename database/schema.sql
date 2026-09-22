@@ -42,3 +42,4 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS chat_messages_prediction_idx ON chat_messages (prediction_id, created_at);
+CREATE INDEX IF NOT EXISTS chat_messages_prediction_order_idx ON chat_messages (prediction_id, created_at, id);
