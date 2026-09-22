@@ -8,6 +8,7 @@ const { Pool } = pg
 const app = express()
 const port = Number(process.env.PORT || 3001)
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const maxDocumentBytes = 10 * 1024 * 1024
 
 app.use(cors())
 app.use(express.json({ limit: '15mb' }))
@@ -76,6 +77,7 @@ app.post('/api/predictions/:id/messages', async (request, response) => {
   const ownership = await pool.query('SELECT id FROM predictions WHERE id = $1 AND user_id = $2', [request.params.id, user.id])
   if (!ownership.rowCount) return response.status(404).json({ error: 'Prediction not found' })
   const { role, content } = request.body
+  if (!['user', 'assistant'].includes(role) || typeof content !== 'string' || !content.trim() || content.length > 12000) return response.status(400).json({ error: 'A valid chat message is required' })
   const result = await pool.query('INSERT INTO chat_messages (prediction_id, role, content) VALUES ($1,$2,$3) RETURNING role, content, created_at', [request.params.id, role, content])
   response.status(201).json({ message: result.rows[0] })
 })
@@ -83,6 +85,12 @@ app.post('/api/predictions/:id/messages', async (request, response) => {
 app.post('/api/chat', async (request, response) => {
   const { message, disease, prediction, clinicalData, files, file, predictionId, userId } = request.body
   if (!message || typeof message !== 'string') return response.status(400).json({ error: 'A message is required' })
+  if (message.length > 4000) return response.status(400).json({ error: 'Please keep the question under 4,000 characters' })
+  if (file) {
+    const allowedType = typeof file.type === 'string' && (file.type.startsWith('image/') || file.type === 'application/pdf' || file.type.startsWith('text/'))
+    const encodedSize = typeof file.data === 'string' ? Math.ceil(file.data.length * 0.75) : 0
+    if (!allowedType || !file.data || encodedSize > maxDocumentBytes) return response.status(400).json({ error: 'The document is missing, unsupported, or larger than 10 MB' })
+  }
   if (predictionId && userId) {
     const ownership = await pool.query('SELECT id FROM predictions WHERE id = $1 AND user_id = $2', [predictionId, userId])
     if (!ownership.rowCount) return response.status(404).json({ error: 'Prediction not found' })
@@ -90,7 +98,7 @@ app.post('/api/chat', async (request, response) => {
   if (!process.env.OPENAI_API_KEY) return response.status(503).json({ error: 'AI provider is not configured' })
 
   try {
-    const context = `Current topic: ${disease || 'general health'}\nEducational estimate: ${prediction || 'not generated'}\nClinical data: ${JSON.stringify(clinicalData || {})}\nUploaded files: ${files?.join(', ') || 'none'}\nQuestion: ${message}`
+    const context = `Current topic: ${disease || 'general health'}\nEducational estimate: ${prediction || 'not generated'}\nClinical data: ${JSON.stringify(clinicalData || {})}\nUploaded files: ${files?.join(', ') || 'none'}\nAttachment handling: Report only text or image details that are actually legible or visible. If an image is blurry, cropped, rotated, low-resolution, poorly lit, handwritten, or otherwise uncertain, say so and do not guess. Separate observed or transcribed content from possible interpretations and unknowns.\nQuestion: ${message}`
     const inputContent = [{ type: 'input_text', text: context }]
     if (file?.data && file?.type?.startsWith('image/')) inputContent.push({ type: 'input_image', image_url: file.data })
     if (file?.data && (file?.type === 'application/pdf' || file?.type?.startsWith('text/'))) inputContent.push({ type: 'input_file', filename: file.name || 'health-report', file_data: file.data })
@@ -99,7 +107,7 @@ app.post('/api/chat', async (request, response) => {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        instructions: 'You are ClinQ, a careful health education assistant for patients. Answer any health-related question within your knowledge: diseases, symptoms, causes, prevention, risk factors, diagnostic tests, lab values, imaging reports, medicines, side effects, prescriptions, interactions, diet, exercise, sleep, mental wellbeing, recovery, and preparing for a doctor visit. Use the user context and attached report when present. Explain medical terms in plain language. Separate known facts from possibilities, do not invent values or findings, and say what information is missing. For report questions, identify the relevant finding before explaining it. Ask one focused clarifying question when needed. Never diagnose, prescribe, recommend starting/stopping/changing a medicine, or claim certainty. Encourage a qualified clinician for interpretation. For chest pain, severe breathing difficulty, sudden weakness, confusion, severe allergic reaction, heavy bleeding, or thoughts of self-harm, recommend urgent emergency care immediately. Give concise answers with: what it may mean, what to do next, and when to seek care. This is education, not a replacement for professional medical advice.',
+        instructions: 'You are ClinQ, a careful health education assistant for patients. Answer health questions using the user context and attached report or image when present. For X-rays, describe only clearly visible features and state that an image cannot establish a diagnosis. For reports, identify only values, reference ranges, findings, and impressions actually present. For prescriptions, transcribe medicine names, strength, frequency, duration, route, and instructions only when legible; mark uncertain handwriting as unreadable and never invent a dosage. Explain medical terms in plain language. Separate observed facts from possible interpretations and unknowns. Never diagnose, prescribe, recommend starting/stopping/changing a medicine, or claim certainty. Ask for a clearer image when quality prevents reliable reading. Encourage a qualified clinician for interpretation. For chest pain, severe breathing difficulty, sudden weakness, confusion, severe allergic reaction, heavy bleeding, or thoughts of self-harm, recommend urgent emergency care immediately. Give concise answers with what is known, what it may mean, what to do next, and when to seek care. This is education, not a replacement for professional medical advice.',
         input: [{ role: 'user', content: inputContent }],
         max_output_tokens: 500,
       }),
@@ -107,7 +115,6 @@ app.post('/api/chat', async (request, response) => {
     if (!aiResponse.ok) return response.status(502).json({ error: 'The AI provider could not answer right now' })
     const data = await aiResponse.json()
     const answer = data.output_text || 'I could not generate an answer right now.'
-    if (predictionId) await pool.query('INSERT INTO chat_messages (prediction_id, role, content) VALUES ($1, $2, $3)', [predictionId, 'assistant', answer])
     response.json({ answer })
   } catch {
     response.status(502).json({ error: 'Unable to reach the AI provider' })

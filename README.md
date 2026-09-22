@@ -11,9 +11,10 @@ ClinQ is an AI-assisted health workspace for understanding diagnostic reports, t
 1. Create a PostgreSQL database named `clinq_db` in pgAdmin.
 2. Copy `.env.example` to `.env`.
 3. Replace `your_password` in `DATABASE_URL` with the password created during PostgreSQL installation.
-4. Run the schema from pgAdmin's Query Tool using `database/schema.sql`.
-5. Install dependencies with `npm install`.
-6. Start the frontend and API in separate terminals:
+4. Keep `OPENAI_API_KEY` server-side and set `VITE_API_URL=http://localhost:3001` for local development.
+5. Run the schema from pgAdmin's Query Tool using `database/schema.sql`.
+6. Install dependencies with `npm install`.
+7. Start the frontend and API in separate terminals:
 
 ```powershell
 npm run dev
@@ -28,7 +29,8 @@ For both processes in one terminal, use `npm run dev:full`.
 
 - `GET /api/health` checks the PostgreSQL connection.
 - `GET /api/reports` returns stored report records.
-The next backend step is authenticated report upload and AI analysis processing. Do not use real patient data in this prototype until authentication, authorization, audit logging, encrypted storage, and clinical safety review are implemented.
+- The authenticated chat accepts image, PDF, and text medical documents up to 10 MB and uses them as context for follow-up questions in the current conversation.
+- Do not use real patient data in this prototype until authentication, authorization, audit logging, encrypted storage, and clinical safety review are implemented.
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
