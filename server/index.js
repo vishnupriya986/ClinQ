@@ -143,6 +143,11 @@ app.get('/api/reports', async (_request, response) => {
   }
 })
 
+app.use((error, _request, response, _next) => {
+  console.error('API request failed:', error instanceof Error ? error.message : 'unknown error')
+  if (!response.headersSent) response.status(500).json({ error: 'The ClinQ API could not complete that request.' })
+})
+
 if (!process.env.VERCEL) {
   initializeDatabase().then(() => app.listen(port, () => {
     console.log(`ClinQ API running at http://localhost:${port}`)
