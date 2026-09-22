@@ -23,6 +23,8 @@ npm run server
 
 The frontend runs at `http://localhost:5173` and the API runs at `http://localhost:3001`. Check the database connection at `http://localhost:3001/api/health`.
 
+For the Vercel deployment, add `DATABASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` in the Vercel project environment variables. Production uses the same-origin `/api` route; local development uses `http://localhost:3001`.
+
 For both processes in one terminal, use `npm run dev:full`.
 
 ## Available API
