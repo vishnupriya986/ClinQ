@@ -1,0 +1,22 @@
+[33mc64aaba[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Restore production API routing
+[33mf9b7af5[m Keep historical API key file deleted after rollback
+[33mf017efe[m Revert "Enhance ClinQ AI chatbot and medical document analysis"
+[33m5bf872d[m Revert "Fix Vercel authentication API routing"
+[33mbf495e2[m Revert "Fix Vercel catch-all API routing"
+[33m8ed732e[m Revert "Use same-origin API in production"
+[33maafd853[m Revert "Return JSON errors from production auth API"
+[33mfe0ee43[m Revert "Add explicit Vercel auth routes"
+[33ma46fe1c[m Revert "Normalize Vercel authentication function paths"
+[33mcffed7f[m Revert "Persist chatbot conversations in prediction history"
+[33m11d508b[m Revert "Fix chatbot persistence in prediction history"
+[33m522eccd[m[33m ([m[1;31morigin/main[m[33m)[m Fix chatbot persistence in prediction history
+[33m5aa7d11[m Persist chatbot conversations in prediction history
+[33mf07fd68[m Normalize Vercel authentication function paths
+[33me59c0f5[m Add explicit Vercel auth routes
+[33ma23ac04[m Return JSON errors from production auth API
+[33m5ba4205[m Use same-origin API in production
+[33mdb39adf[m Fix Vercel catch-all API routing
+[33m9e90239[m Fix Vercel authentication API routing
+[33m5402480[m Enhance ClinQ AI chatbot and medical document analysis
+[33m4e30d57[m Connect frontend to production backend
+[33me059cbc[m Initial commit
